@@ -8,7 +8,11 @@ edition = "2018"
 
 [dependencies]
 rand = "*"
-trust-dns-resolver = { version = "0.19.5", features = ["dns-over-rustls"] }
+dns-parser = "0.8.0"
+
+
+resolve = "0.2.0"
+
 reqwest = { version = "0.10.6", features = ["rustls-tls", "json"] }
 rustls = "0.17.0"
 webpki = "*"

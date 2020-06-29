@@ -1,17 +1,54 @@
 use std::sync::Arc;
-
-use io::Read;
-use io::Write;
-use std::io;
+// use io::Read;
+// use io::Write;
+// use std::io;
 
 // use std::net::*;
 
-use rustls;
-use webpki;
-use webpki_roots;
+use std::str;
+use std::net::UdpSocket;
+
+// use rustls;
+// use webpki;
+// use webpki_roots;
 // use trust_dns_resolver::Resolver;
 // use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+// use trust_dns_resolver::lookup::Lookup;
 
+use dns_parser;
+use std::convert::TryInto;
+
+// use resolve::config::DnsConfig;
+// use resolve::resolver::DnsResolver;
+// use resolve::record::Record;
+
+fn get_gns_txt(host: &str) {
+    let mut b = dns_parser::Builder::new_query(0x0000, true);
+    b.add_question(
+        format!("_esni.{}", host).as_str(),
+        false,
+        dns_parser::QueryType::TXT,
+        dns_parser::QueryClass::IN);
+    let packet = b.build().unwrap();
+    let packet = packet.as_slice();
+
+    let s = UdpSocket::bind("127.0.0.1:55556").unwrap();
+    s.send_to(packet, "127.0.0.53:53").unwrap();
+
+    let mut buf = [0u8; 1024];
+    s.recv_from(&mut buf).unwrap();
+
+    let packet = dns_parser::Packet::parse(&buf).unwrap();
+    for i in packet.answers {
+        match i.data {
+            dns_parser::rdata::RData::TXT(aaaa) => {
+                dbg!(str::from_utf8(aaaa));//todo
+            }
+            _ => {}
+        }
+    }
+    ;
+}
 
 fn make_config() -> Arc<rustls::ClientConfig> {
     let mut config = rustls::ClientConfig::new();
@@ -24,43 +61,30 @@ fn make_config() -> Arc<rustls::ClientConfig> {
     Arc::new(config)
 }
 
+
 fn main() {
-    let arc = make_config();
-    let dns_name = webpki::DNSNameRef::try_from_ascii_str("derpibooru.org").unwrap();
-    let mut client = rustls::ClientSession::new(&arc, dns_name);
+    let host = "derpibooru.org";
+    let r = get_gns_txt(host);
 
-    let mut socket = std::net::TcpStream::connect("derpibooru.org:443").unwrap();
-    let mut stream = rustls::Stream::new(&mut client, &mut socket); // Create stream
-    // Instead of writing to the client, you write to the stream
-    match stream.write(b"GET / HTTP/1.1\r\nConnection: close\r\n\r\n") {
-        Ok(_) => {}
-        Err(e) => {
-            println!("Error: {}", e);
-            return;
-        }
-    }
-    let mut plaintext = Vec::new();
-    stream.read_to_end(&mut plaintext).unwrap();
-    io::stdout().write_all(&plaintext).unwrap();
+    //
+    // let arc = make_config();
+    // let dns_name = webpki::DNSNameRef::try_from_ascii_str("derpibooru.org").unwrap();
+    // let mut client = rustls::ClientSession::new(&arc, dns_name);
+    //
+    // let mut socket = std::net::TcpStream::connect("derpibooru.org:443").unwrap();
+    // let mut stream = rustls::Stream::new(&mut client, &mut socket); // Create stream
+    // // Instead of writing to the client, you write to the stream
+    // match stream.write(b"GET / HTTP/1.1\r\nConnection: close\r\n\r\n") {
+    //     Ok(_) => {}
+    //     Err(e) => {
+    //         println!("Error: {}", e);
+    //         return;
+    //     }
+    // }
+    // let mut plaintext = Vec::new();
+    // stream.read_to_end(&mut plaintext).unwrap();
+    // io::stdout().write_all(&plaintext).unwrap();
 }
-
-
-//
-//
-// fn main() {
-//     let mut config = rustls::ClientConfig::new();
-//     config.root_store.add_server_trust_anchors(
-//         &webpki_roots::TLS_SERVER_ROOTS);
-//
-
-// let resolver = Resolver::new(ResolverConfig::cloudflare_tls(),
-//                                  ResolverOpts::default()).unwrap();
-//
-// let response = resolver.lookup_ip("derpibooru.org").unwrap();
-// for i in response.iter() {
-//     dbg!(i);
-//     break;
-// }
 
 
 // There can be many addresses associated with the name,
