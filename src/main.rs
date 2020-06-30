@@ -1,10 +1,4 @@
 use std::sync::Arc;
-// use io::Read;
-// use io::Write;
-// use std::io;
-
-// use std::net::*;
-
 use std::str;
 use std::net::UdpSocket;
 
@@ -16,13 +10,15 @@ use std::net::UdpSocket;
 // use trust_dns_resolver::lookup::Lookup;
 
 use dns_parser;
-use std::convert::TryInto;
 
 // use resolve::config::DnsConfig;
 // use resolve::resolver::DnsResolver;
 // use resolve::record::Record;
 
-fn get_gns_txt(host: &str) {
+/// вернуть txt-запись для
+fn get_esni(host: &str) -> String {//todo Result
+    const DNS: &str = "127.0.0.53:53";
+
     let mut b = dns_parser::Builder::new_query(0x0000, true);
     b.add_question(
         format!("_esni.{}", host).as_str(),
@@ -32,23 +28,39 @@ fn get_gns_txt(host: &str) {
     let packet = b.build().unwrap();
     let packet = packet.as_slice();
 
-    let s = UdpSocket::bind("127.0.0.1:55556").unwrap();
-    s.send_to(packet, "127.0.0.53:53").unwrap();
+    let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+    s.send_to(packet, DNS).unwrap();
 
     let mut buf = [0u8; 1024];
     s.recv_from(&mut buf).unwrap();
 
     let packet = dns_parser::Packet::parse(&buf).unwrap();
-    for i in packet.answers {
-        match i.data {
-            dns_parser::rdata::RData::TXT(aaaa) => {
-                dbg!(str::from_utf8(aaaa));//todo
-            }
-            _ => {}
-        }
+    match packet.answers[0].data {
+        dns_parser::rdata::RData::TXT(ref text) =>
+            text.iter()
+                .map(|x| str::from_utf8(x).unwrap())
+                .collect::<Vec<_>>()
+                .concat(),
+        ref x => panic!("Wrong rdata {:?}", x),
     }
-    ;
 }
+
+#[cfg(test)]
+mod test {
+    use crate::get_esni;
+
+    #[test]
+    fn get_esni1() {
+        assert_eq!(get_esni("derpibooru.org"), "/wF5SzEIACQAHQAg5aYKojoE8kXfSQ8QFA92ojGJr\
+        FlXzqf8qOnDhLXf8g4AAhMBAQQAAAAAXvdtAAAAAABe/1YAAAA=");
+    }
+
+    #[test]
+    fn get_esni2() {
+        assert_eq!(get_esni("derpibooru.or"), "");//todo
+    }
+}
+
 
 fn make_config() -> Arc<rustls::ClientConfig> {
     let mut config = rustls::ClientConfig::new();
@@ -64,7 +76,8 @@ fn make_config() -> Arc<rustls::ClientConfig> {
 
 fn main() {
     let host = "derpibooru.org";
-    let r = get_gns_txt(host);
+    let r = get_esni(host);
+    println!("{}", r);
 
     //
     // let arc = make_config();
