@@ -1,3 +1,6 @@
+mod dns;
+mod esni;
+
 use std::sync::Arc;
 
 // use rustls;
@@ -9,10 +12,6 @@ use std::sync::Arc;
 // use resolve::config::DnsConfig;
 // use resolve::resolver::DnsResolver;
 // use resolve::record::Record;
-
-extern crate base64;
-
-mod dns;
 
 
 fn make_config() -> Arc<rustls::ClientConfig> {
@@ -28,12 +27,11 @@ fn make_config() -> Arc<rustls::ClientConfig> {
 
 
 fn main() {
-    let host = "derpibooru.org";
-    let txt = dns::get_txt(format!("_esni.{}", host).as_str()).unwrap();
-    let bytes = base64::decode(txt).unwrap();
-    println!("{:?}", bytes);
+    const HOST: &str = "derpibooru.org";
+    let txt = dns::get_txt(format!("_esni.{}", HOST).as_str()).unwrap();
+    let r = esni::ESNIKeys::parse_from_base64(txt);
+    println!("{:?}", r);
 
-    //
     // let arc = make_config();
     // let dns_name = webpki::DNSNameRef::try_from_ascii_str("derpibooru.org").unwrap();
     // let mut client = rustls::ClientSession::new(&arc, dns_name);

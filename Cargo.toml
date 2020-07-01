@@ -10,6 +10,7 @@ edition = "2018"
 rand = "^0"
 base64 = "^0.12"
 dns-parser = "^0.8"  # >=0.2.3
+sha2 = "^0.9"
 
 
 resolve = "0.2.0"
