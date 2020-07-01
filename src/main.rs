@@ -10,8 +10,9 @@ use std::sync::Arc;
 // use resolve::resolver::DnsResolver;
 // use resolve::record::Record;
 
+extern crate base64;
+
 mod dns;
-use crate::dns::get_esni;
 
 
 fn make_config() -> Arc<rustls::ClientConfig> {
@@ -28,8 +29,9 @@ fn make_config() -> Arc<rustls::ClientConfig> {
 
 fn main() {
     let host = "derpibooru.org";
-    let r = get_esni(host);
-    println!("{}", r);
+    let txt = dns::get_txt(format!("_esni.{}", host).as_str()).unwrap();
+    let bytes = base64::decode(txt).unwrap();
+    println!("{:?}", bytes);
 
     //
     // let arc = make_config();
@@ -50,14 +52,3 @@ fn main() {
     // stream.read_to_end(&mut plaintext).unwrap();
     // io::stdout().write_all(&plaintext).unwrap();
 }
-
-
-// There can be many addresses associated with the name,
-//  this can return IPv4 and/or IPv6 addresses
-// let address = response.next().expect("no addresses returned!");
-// if address.is_ipv4() {
-//     assert_eq!(address, IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34)));
-// } else {
-//     assert_eq!(address, IpAddr::V6(Ipv6Addr::new(0x2606, 0x2800, 0x220, 0x1, 0x248, 0x1893, 0x25c8, 0x1946)));
-// }
-// }

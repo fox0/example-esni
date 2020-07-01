@@ -1,59 +1,83 @@
+// #![feature(const_generics)]
 use std::str;
 use std::net::UdpSocket;
+// use std::mem::{self, MaybeUninit};
 
-use dns_parser;
+use dns_parser::{Builder, QueryType, QueryClass, Packet};
+use dns_parser::rdata::RData;
+
+
+//todo class с сокетом
 
 /// вернуть txt-запись для
-pub fn get_esni(host: &str) -> String {
-    //todo Result
+pub fn get_txt(host: &str) -> Result<String, &'static str> {
     const DNS: &str = "127.0.0.53:53";
-
-    let mut b = dns_parser::Builder::new_query(0x0000, true);
+    let mut b = Builder::new_query(0x0000, true);
     b.add_question(
-        format!("_esni.{}", host).as_str(),
+        host,
         false,
-        dns_parser::QueryType::TXT,
-        dns_parser::QueryClass::IN);
+        QueryType::TXT,
+        QueryClass::IN);
     let packet = b.build().unwrap();
     let packet = packet.as_slice();
 
     let s = UdpSocket::bind("127.0.0.1:0").unwrap();
     s.send_to(packet, DNS).unwrap();
 
-    let mut buf = [0u8; 1024];
-    s.recv_from(&mut buf).unwrap();
+    let mut packet = [0u8; 1024];
+    // let aaa = get_uninit_array::<u8, 1024>();
+    s.recv_from(&mut packet).unwrap();
 
-    let packet = dns_parser::Packet::parse(&buf).unwrap();
+    let packet = Packet::parse(&packet).unwrap();
+    if packet.answers.len() == 0 {
+        return Err("no answers");
+    }
     match packet.answers[0].data {
-        dns_parser::rdata::RData::TXT(ref text) =>
-            text.iter()
+        RData::TXT(ref text) =>
+        //todo maybe вытащить указатель?
+            Ok(text.iter()
                 .map(|x| str::from_utf8(x).unwrap())
                 .collect::<Vec<_>>()
-                .concat(),
-        ref x => panic!("Wrong rdata {:?}", x),
+                .concat()),
+        ref _x => Err("Wrong rdata"),
     }
 }
+
+// http://adventures.michaelfbryan.com/posts/const-arrayvec/
+// fn get_uninit_array<U, const size: usize>() -> [U; size]{
+//     const SIZE: usize = 100500;
+//     type U = u8;
+//     unsafe {
+//         mem::transmute::<[MaybeUninit<U>; size], [U; size]>(
+//             MaybeUninit::uninit().assume_init())
+//     }
+// }
 
 
 #[cfg(test)]
 mod test {
-    use crate::dns::get_esni;
+    use crate::dns::get_txt;
 
-    const BASE64: &str = "/wGwMqOgACQAHQAgDM1kPDS/QlPaOglqcs6Qj13o9KlkrNpPwXKIM7+6iCEAAhMBAQQAAAAA\
-    XvhOAAAAAABfADcAAAA=";
+    const BASE64: &str = "/wHaaNeDACQAHQAgiz5G/knn0s9DJ4ZFg/l4QrUhtqSraam+gjcOA4/EpwEAAhMBAQQAAAAAX\
+    vhcEAAAAABfAEUQAAA=";
 
     #[test]
     fn get_esni_cloudflare() {
-        assert_eq!(get_esni("cloudflare.com"), BASE64);
+        assert_eq!(get_txt("_esni.cloudflare.com").unwrap(), BASE64);
     }
 
     #[test]
     fn get_esni_derpibooru() {
-        assert_eq!(get_esni("derpibooru.org"), BASE64);
+        assert_eq!(get_txt("_esni.derpibooru.org").unwrap(), BASE64);
     }
 
     #[test]
     fn get_esni2() {
-        assert_eq!(get_esni("derpibooru.or"), "");//todo
+        assert_eq!(get_txt("derpibooru.org").unwrap(), "v=spf1 +mx -all");
+    }
+
+    #[test]
+    fn get_esni_error() {
+        assert_eq!(get_txt("derpibooru.or").unwrap_err(), "no answers");
     }
 }
