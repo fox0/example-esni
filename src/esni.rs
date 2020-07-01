@@ -1,7 +1,6 @@
-extern crate base64;
-
 use std::convert::TryInto;
 
+use base64;
 use byteorder::{BigEndian, ByteOrder};
 use sha2::{self, Digest};
 
@@ -30,30 +29,37 @@ pub struct ESNIKeys {
     checksum: [u8; 4],
 
     //todo
-
-    version_is_valid: bool,
-    checksum_is_valid: bool,
 }
 
 impl ESNIKeys {
-    pub fn parse_from_base64(txt: String) -> ESNIKeys {
+    pub fn parse_from_base64(txt: String) -> Result<ESNIKeys, &'static str> {
         let data = base64::decode(txt).unwrap();
+        ESNIKeys::parse(data)
+    }
 
+    pub fn parse(data: Vec<u8>) -> Result<ESNIKeys, &'static str> {
         let version = BigEndian::read_u16(&data[..2]);
+        if version != 0xff01 {
+            return Err("version invalid");
+        }
 
-        let mut copy_data = data.clone();
-        copy_data[2..6].clone_from_slice(&[0u8; 4]); //arr[2:6] = [0] * 4
-        let hash = sha2::Sha256::digest(&copy_data);
+        let mut copy = data.clone();
+        copy[2..6].clone_from_slice(&[0u8; 4]); //copy[2:6] = [0] * 4
+        let hash = sha2::Sha256::digest(&copy);
         let hash = hash.as_slice();
+        if data[2..6] != hash[..4] {
+            return Err("checksum invalid");
+        }
+
+        let r = BigEndian::read_u16(&data[7..9]);
+        dbg!(r);
 
         // https://github.com/mordyovits/esnitool/blob/master/esni.go
 
-        ESNIKeys {
+        Ok(ESNIKeys {
             version,
-            version_is_valid: version == 0xff01,
             checksum: data[2..6].try_into().unwrap(),
-            checksum_is_valid: data[2..6] == hash[..4],
 
-        }
+        })
     }
 }
