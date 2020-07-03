@@ -7,10 +7,17 @@ use dns_parser::{Builder, QueryType, QueryClass, Packet};
 use dns_parser::rdata::RData;
 
 
+// #[derive(Debug)]
+// //use dns_parser::rdata::txt::Record;
+// pub struct MyRecord<'a> {
+//     pub bytes: &'a [u8],
+// }
+
+
 //todo class с сокетом
 
 /// вернуть txt-запись для
-pub fn get_txt(host: &str) -> Result<String, &'static str> {
+pub fn get_txt(host: &str) -> Result<String /*&[u8]*/, &'static str> {
     const DNS: &str = "127.0.0.53:53";
     let mut b = Builder::new_query(0x0000, true);
     b.add_question(
@@ -33,12 +40,15 @@ pub fn get_txt(host: &str) -> Result<String, &'static str> {
         return Err("no answers");
     }
     match packet.answers[0].data {
-        RData::TXT(ref text) =>
-        //todo maybe вытащить указатель?
-            Ok(text.iter()
+        RData::TXT(ref record) => {
+            //todo
+            // let result: &MyRecord = unsafe { std::mem::transmute(record) };
+            // Ok(result.bytes)
+            Ok(record.iter()
                 .map(|x| str::from_utf8(x).unwrap())
                 .collect::<Vec<_>>()
-                .concat()),
+                .concat())
+        }
         ref _x => Err("Wrong rdata"),
     }
 }

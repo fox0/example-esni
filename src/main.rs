@@ -28,7 +28,8 @@ fn make_config() -> Arc<rustls::ClientConfig> {
 
 fn main() {
     const HOST: &str = "derpibooru.org";
-    let txt = dns::get_txt(format!("_esni.{}", HOST).as_str()).unwrap();
+    let host2 = format!("_esni.{}", HOST);
+    let txt = dns::get_txt(host2.as_str()).unwrap();
     let r = esni::ESNIKeys::parse_from_base64(txt);
     println!("{:?}", r);
 
