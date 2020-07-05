@@ -1,9 +1,7 @@
 use std::convert::{TryInto, TryFrom};
-use std::time::{UNIX_EPOCH, Duration};
 
 use byteorder::{BigEndian, ByteOrder};
-use chrono::prelude::DateTime;
-use chrono::Utc;
+use chrono::{DateTime, TimeZone, Utc};
 use sha2::{self, Digest};
 
 
@@ -171,25 +169,26 @@ impl ESNIKeys {
         let padded_length = BigEndian::read_u16(&data[pos..pos + 2]);
         pos += 2;
 
+        // let utc: DateTime<Utc> = Utc::now();
+
         // not_before
-        let not_before = DateTime::<Utc>::from(
-            UNIX_EPOCH + Duration::from_secs(
-                BigEndian::read_u64(&data[pos..pos + 8])));
+        let not_before = Utc.timestamp(BigEndian::read_i64(&data[pos..pos + 8]), 0);
+        // if utc <= not_before {
+        //     return Err("not_before invalid");
+        // }
         pos += 8;
 
         // not_after
-        let not_after = DateTime::<Utc>::from(
-            UNIX_EPOCH + Duration::from_secs(
-                BigEndian::read_u64(&data[pos..pos + 8])));
+        let not_after = Utc.timestamp(BigEndian::read_i64(&data[pos..pos + 8]), 0);
+        // if utc > not_after {
+        //     return Err("not_after invalid");
+        // }
         pos += 8;
-
-        //todo <= now() <=
 
         // extensions
         let extensions = Vec::new();
         // let len = BigEndian::read_u16(&data[pos..pos + 2]) as usize;
         pos += 2;
-
         //todo len
 
         assert_eq!(pos, data.len());
@@ -229,6 +228,8 @@ mod test {
         assert_eq!(result.cipher_suites.len(), 1);
         assert_eq!(result.cipher_suites[0], CipherSuite::TlsAes128GcmSha256);
         assert_eq!(result.padded_length, 260);
-        // todo
+        assert_eq!(result.not_before.to_string(), "2020-07-02 10:00:00 UTC");
+        assert_eq!(result.not_after.to_string(), "2020-07-08 10:00:00 UTC");
+        assert_eq!(result.extensions.len(), 0);
     }
 }
