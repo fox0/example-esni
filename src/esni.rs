@@ -22,7 +22,7 @@ use sha2::{self, Digest};
 ///     ecdhe_private_use(0xFE00..0xFEFF),
 ///     (0xFFFF)
 /// } NamedGroup;
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum NamedGroup {
     //todo
     X25519 = 0x001D,
@@ -43,7 +43,7 @@ pub enum NamedGroup {
 ///               |                              |             |
 ///               | TLS_AES_128_CCM_8_SHA256     | {0x13,0x05} |
 ///               +------------------------------+-------------+
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CipherSuite {
     TlsAes128GcmSha256 = 0x1301,
     //todo
@@ -73,10 +73,11 @@ pub struct KeyShareEntry {
 /// } ESNIKeys;
 #[derive(Debug)]
 pub struct ESNIKeys {
-    // version: u16,
-    // checksum: [u8; 4],
+    version: u16,
+    checksum: [u8; 4],
     keys: Vec<KeyShareEntry>,
     cipher_suites: Vec<CipherSuite>,
+    padded_length: u16,
     //todo
 }
 
@@ -114,11 +115,12 @@ impl ESNIKeys {
         pos += 2;
 
         // checksum
+        let checksum = data[pos..pos + 4].try_into().unwrap();
         let mut copy = data.to_owned(); // (?)
         copy[pos..pos + 4].clone_from_slice(&[0u8; 4]); //copy[2:6] = [0] * 4
         let hash = sha2::Sha256::digest(&copy);
         let hash = hash.as_slice();
-        if data[pos..pos + 4] != hash[..4] {
+        if checksum != hash[..4] {
             return Err("checksum invalid");
         }
         pos += 4;
@@ -160,10 +162,39 @@ impl ESNIKeys {
             pos += 2;
         }
 
-        dbg!(pos, data.len());
+        // padded_length
+        let padded_length = BigEndian::read_u16(&data[pos..pos + 2]);
+        pos += 2;
 
         //todo
 
-        Ok(ESNIKeys { keys, cipher_suites })
+        Ok(ESNIKeys { version, checksum, keys, cipher_suites, padded_length })
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use crate::esni::{ESNIKeys, NamedGroup, CipherSuite};
+
+    #[test]
+    fn parse() {
+        static DATA: &'static [u8] = &[
+            255, 1, 162, 90, 17, 124, 0, 36, 0, 29, 0, 32, 20, 10, 20, 161, 155, 152, 45, 184, 222,
+            180, 113, 14, 192, 173, 73, 157, 20, 233, 218, 93, 165, 233, 201, 244, 153, 153, 225,
+            36, 121, 33, 15, 115, 0, 2, 19, 1, 1, 4, 0, 0, 0, 0, 94, 253, 176, 32, 0, 0, 0, 0, 95,
+            5, 153, 32, 0, 0];
+        let result = ESNIKeys::parse(DATA).unwrap();
+        assert_eq!(result.version, 0xff01);
+        assert_eq!(result.checksum, [162, 90, 17, 124]);
+        assert_eq!(result.keys.len(), 1);
+        assert_eq!(result.keys[0].group, NamedGroup::X25519);
+        assert_eq!(result.keys[0].key_exchange, [
+            20, 10, 20, 161, 155, 152, 45, 184, 222, 180, 113, 14, 192, 173, 73, 157, 20, 233, 218,
+            93, 165, 233, 201, 244, 153, 153, 225, 36, 121, 33, 15, 115]);
+        assert_eq!(result.cipher_suites.len(), 1);
+        assert_eq!(result.cipher_suites[0], CipherSuite::TlsAes128GcmSha256);
+        assert_eq!(result.padded_length, 260);
+
     }
 }
