@@ -1,6 +1,6 @@
 use std::convert::{TryInto, TryFrom};
+use std::marker::PhantomData;
 
-use base64;
 use byteorder::{BigEndian, ByteOrder};
 use sha2::{self, Digest};
 
@@ -46,12 +46,13 @@ impl TryFrom<u16> for NamedGroup {
 ///     NamedGroup group;
 ///     opaque key_exchange<1..2^16-1>;
 /// } KeyShareEntry;
+#[derive(Debug)]
 pub struct KeyShareEntry {
     group: NamedGroup,
+    key_exchange: [u8; 32],  //todo
 }
 
 
-#[derive(Debug)]
 /// struct {
 ///     uint16 version;
 ///     uint8 checksum[4];
@@ -62,56 +63,71 @@ pub struct KeyShareEntry {
 ///     uint64 not_after;
 ///     Extension extensions<0..2^16-1>;
 /// } ESNIKeys;
-pub struct ESNIKeys {
-    version: u16,
-    checksum: [u8; 4],
+#[derive(Debug)]
+pub struct ESNIKeys<'a> {
+    // version: u16,
+    // checksum: [u8; 4],
+    keys: KeyShareEntry/*<'a>*/, //Vec<KeyShareEntry<'a>>,
 
+    phantom: PhantomData<&'a u8>,
     //todo
 }
 
-impl ESNIKeys {
-    pub fn parse_from_base64(data: String /*&[u8]*/) -> Result<ESNIKeys, &'static str> {
-        let data = base64::decode(data).unwrap();
-        // println!("{:?}", data);
-        ESNIKeys::parse(data)
-    }
+impl<'a> ESNIKeys<'a> {
+    pub fn parse(data: &[u8]) -> Result<ESNIKeys<'a>, &'static str> {
+        let mut pos = 0;
 
-    pub fn parse(data: Vec<u8>) -> Result<ESNIKeys, &'static str> {
-        let version = BigEndian::read_u16(&data[..2]);
+        // version
+        let version = BigEndian::read_u16(&data[pos..pos + 2]);
         if version != 0xff01 {
             return Err("version invalid");
         }
+        pos += 2;
 
-        let mut copy = data.clone();
-        copy[2..6].clone_from_slice(&[0u8; 4]); //copy[2:6] = [0] * 4
+        // checksum
+        let mut copy = data.to_owned(); // (?)
+        copy[pos..pos + 4].clone_from_slice(&[0u8; 4]); //copy[2:6] = [0] * 4
         let hash = sha2::Sha256::digest(&copy);
         let hash = hash.as_slice();
-        if data[2..6] != hash[..4] {
+        if data[pos..pos + 4] != hash[..4] {
             return Err("checksum invalid");
         }
+        pos += 4;
 
-        let length = BigEndian::read_u16(&data[6..8]) as usize;
-        dbg!(length);
+        let len = BigEndian::read_u16(&data[pos..pos + 2]) as usize;
+        pos += 2;
+        dbg!(len);
 
-        let subdata = &data[8..8 + length];
-        // dbg!(subdata);
-        // todo for
-        let group: NamedGroup = match BigEndian::read_u16(&subdata[..2]).try_into() {
-            Ok(x) => x,
-            Err(e) => return Err("group invalid"),
-        };
-        dbg!(group);
+        // keys
+        let mut keys = Vec::new();
+        let end = pos + len;
+        while pos < end {
+            let group: NamedGroup = match BigEndian::read_u16(&data[pos..pos + 2]).try_into() {
+                Ok(x) => x,
+                Err(_e) => return Err("group invalid"),
+            };
+            pos += 2;
 
-        let v = BigEndian::read_u16(&subdata[2..4]);
-        // dbg!(v);
+            let len = BigEndian::read_u16(&data[pos..pos + 2]) as usize;
+            pos += 2;
+            assert_eq!(len, 32); // todo
 
-        let v = BigEndian::read_u16(&subdata[4..6]);
-        dbg!(v);
+            let key_exchange = &data[pos..pos + len];
+            pos += len;
 
-        Ok(ESNIKeys {
-            version,
-            checksum: data[2..6].try_into().unwrap(),
+            let key_exchange = key_exchange.try_into().unwrap();
+            keys.push(KeyShareEntry { group, key_exchange });
+        }
+        // dbg!(keys);
+        dbg!(pos, data.len());
 
-        })
+
+        Err("stub")
+
+        //Ok(//ESNIKeys {
+        // version,
+        // checksum: data[2..6].try_into().unwrap(),
+        // keys: key1,//vec![key1],
+        //})
     }
 }

@@ -1,7 +1,9 @@
 mod dns;
 mod esni;
 
-use std::sync::Arc;
+// use std::sync::Arc;
+
+use base64;
 
 // use rustls;
 // use webpki;
@@ -14,23 +16,27 @@ use std::sync::Arc;
 // use resolve::record::Record;
 
 
-fn make_config() -> Arc<rustls::ClientConfig> {
-    let mut config = rustls::ClientConfig::new();
-    config.root_store.add_server_trust_anchors(
-        &webpki_roots::TLS_SERVER_ROOTS);
-    let mut versions = Vec::new();
-    versions.push(rustls::ProtocolVersion::TLSv1_3);
-    config.versions = versions;
-    config.enable_sni = false;
-    Arc::new(config)
-}
+// fn make_config() -> Arc<rustls::ClientConfig> {
+//     let mut config = rustls::ClientConfig::new();
+//     config.root_store.add_server_trust_anchors(
+//         &webpki_roots::TLS_SERVER_ROOTS);
+//     let mut versions = Vec::new();
+//     versions.push(rustls::ProtocolVersion::TLSv1_3);
+//     config.versions = versions;
+//     config.enable_sni = false;
+//     Arc::new(config)
+// }
 
 
 fn main() {
     const HOST: &str = "derpibooru.org";
     let host2 = format!("_esni.{}", HOST);
     let txt = dns::get_txt(host2.as_str()).unwrap();
-    let r = esni::ESNIKeys::parse_from_base64(txt);
+
+    let data = base64::decode(txt).unwrap();
+    let data = data.as_slice();
+    println!("{:?}", data);
+    let r = esni::ESNIKeys::parse(&data);
     println!("{:?}", r);
 
     // let arc = make_config();
