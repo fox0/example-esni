@@ -1,6 +1,9 @@
 use std::convert::{TryInto, TryFrom};
+use std::time::{UNIX_EPOCH, Duration};
 
 use byteorder::{BigEndian, ByteOrder};
+use chrono::prelude::DateTime;
+use chrono::Utc;
 use sha2::{self, Digest};
 
 
@@ -78,7 +81,9 @@ pub struct ESNIKeys {
     keys: Vec<KeyShareEntry>,
     cipher_suites: Vec<CipherSuite>,
     padded_length: u16,
-    //todo
+    not_before: DateTime<Utc>,
+    not_after: DateTime<Utc>,
+    extensions: Vec<u8>,  //todo
 }
 
 
@@ -166,9 +171,38 @@ impl ESNIKeys {
         let padded_length = BigEndian::read_u16(&data[pos..pos + 2]);
         pos += 2;
 
-        //todo
+        // not_before
+        let not_before = DateTime::<Utc>::from(
+            UNIX_EPOCH + Duration::from_secs(
+                BigEndian::read_u64(&data[pos..pos + 8])));
+        pos += 8;
 
-        Ok(ESNIKeys { version, checksum, keys, cipher_suites, padded_length })
+        // not_after
+        let not_after = DateTime::<Utc>::from(
+            UNIX_EPOCH + Duration::from_secs(
+                BigEndian::read_u64(&data[pos..pos + 8])));
+        pos += 8;
+
+        //todo <= now() <=
+
+        // extensions
+        let extensions = Vec::new();
+        // let len = BigEndian::read_u16(&data[pos..pos + 2]) as usize;
+        pos += 2;
+
+        //todo len
+
+        assert_eq!(pos, data.len());
+        Ok(ESNIKeys {
+            version,
+            checksum,
+            keys,
+            cipher_suites,
+            padded_length,
+            not_before,
+            not_after,
+            extensions,
+        })
     }
 }
 
@@ -195,6 +229,6 @@ mod test {
         assert_eq!(result.cipher_suites.len(), 1);
         assert_eq!(result.cipher_suites[0], CipherSuite::TlsAes128GcmSha256);
         assert_eq!(result.padded_length, 260);
-
+        // todo
     }
 }
