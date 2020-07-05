@@ -1,13 +1,11 @@
 use std::convert::{TryInto, TryFrom};
-use std::marker::PhantomData;
 
 use byteorder::{BigEndian, ByteOrder};
 use sha2::{self, Digest};
 
 
-// https://github.com/mordyovits/esnitool/blob/master/esni.go
 // https://tools.ietf.org/html/rfc8446#section-4.1.4
-/// https://tools.ietf.org/html/draft-ietf-tls-esni-02#page-6
+// https://tools.ietf.org/html/draft-ietf-tls-esni-02#page-6
 
 
 /// enum {
@@ -31,14 +29,24 @@ pub enum NamedGroup {
     //todo
 }
 
-impl TryFrom<u16> for NamedGroup {
-    type Error = ();
-    fn try_from(v: u16) -> Result<Self, Self::Error> {
-        match v {
-            x if x == NamedGroup::X25519 as u16 => Ok(NamedGroup::X25519),
-            _ => Err(()),
-        }
-    }
+
+///               +------------------------------+-------------+
+///               | Description                  | Value       |
+///               +------------------------------+-------------+
+///               | TLS_AES_128_GCM_SHA256       | {0x13,0x01} |
+///               |                              |             |
+///               | TLS_AES_256_GCM_SHA384       | {0x13,0x02} |
+///               |                              |             |
+///               | TLS_CHACHA20_POLY1305_SHA256 | {0x13,0x03} |
+///               |                              |             |
+///               | TLS_AES_128_CCM_SHA256       | {0x13,0x04} |
+///               |                              |             |
+///               | TLS_AES_128_CCM_8_SHA256     | {0x13,0x05} |
+///               +------------------------------+-------------+
+#[derive(Debug)]
+pub enum CipherSuite {
+    TlsAes128GcmSha256 = 0x1301,
+    //todo
 }
 
 
@@ -64,17 +72,38 @@ pub struct KeyShareEntry {
 ///     Extension extensions<0..2^16-1>;
 /// } ESNIKeys;
 #[derive(Debug)]
-pub struct ESNIKeys<'a> {
+pub struct ESNIKeys {
     // version: u16,
     // checksum: [u8; 4],
-    keys: KeyShareEntry/*<'a>*/, //Vec<KeyShareEntry<'a>>,
-
-    phantom: PhantomData<&'a u8>,
+    keys: Vec<KeyShareEntry>,
+    cipher_suites: Vec<CipherSuite>,
     //todo
 }
 
-impl<'a> ESNIKeys<'a> {
-    pub fn parse(data: &[u8]) -> Result<ESNIKeys<'a>, &'static str> {
+
+impl TryFrom<u16> for NamedGroup {
+    type Error = ();
+    fn try_from(v: u16) -> Result<Self, Self::Error> {
+        match v {
+            x if x == NamedGroup::X25519 as u16 => Ok(NamedGroup::X25519),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<u16> for CipherSuite {
+    type Error = ();
+    fn try_from(v: u16) -> Result<Self, Self::Error> {
+        match v {
+            x if x == CipherSuite::TlsAes128GcmSha256 as u16 =>
+                Ok(CipherSuite::TlsAes128GcmSha256),
+            _ => Err(()),
+        }
+    }
+}
+
+impl ESNIKeys {
+    pub fn parse(data: &[u8]) -> Result<ESNIKeys, &'static str> {
         let mut pos = 0;
 
         // version
@@ -94,13 +123,12 @@ impl<'a> ESNIKeys<'a> {
         }
         pos += 4;
 
+        // keys
+        let mut keys: Vec<KeyShareEntry> = Vec::new();
         let len = BigEndian::read_u16(&data[pos..pos + 2]) as usize;
         pos += 2;
-        dbg!(len);
-
-        // keys
-        let mut keys = Vec::new();
         let end = pos + len;
+        // dbg!(len,end);
         while pos < end {
             let group: NamedGroup = match BigEndian::read_u16(&data[pos..pos + 2]).try_into() {
                 Ok(x) => x,
@@ -118,16 +146,24 @@ impl<'a> ESNIKeys<'a> {
             let key_exchange = key_exchange.try_into().unwrap();
             keys.push(KeyShareEntry { group, key_exchange });
         }
-        // dbg!(keys);
+
+        // cipher_suites
+        let mut cipher_suites: Vec<CipherSuite> = Vec::new();
+        let len = BigEndian::read_u16(&data[pos..pos + 2]) as usize;
+        pos += 2;
+        let end = pos + len;
+        while pos < end {
+            cipher_suites.push(match BigEndian::read_u16(&data[pos..pos + 2]).try_into() {
+                Ok(x) => x,
+                Err(_e) => return Err("cipher_suite invalid"),
+            });
+            pos += 2;
+        }
+
         dbg!(pos, data.len());
 
+        //todo
 
-        Err("stub")
-
-        //Ok(//ESNIKeys {
-        // version,
-        // checksum: data[2..6].try_into().unwrap(),
-        // keys: key1,//vec![key1],
-        //})
+        Ok(ESNIKeys { keys, cipher_suites })
     }
 }
